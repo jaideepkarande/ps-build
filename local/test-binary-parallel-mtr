@@ -106,7 +106,14 @@ function executeSuites() {
     IFS=',' read -ra suiteList <<< "$suites"
     for suite in "${suiteList[@]}"; do
       echo "Executing suite: $suite"
-      execute "$parallel" "--suite=$suite $extraOptions" ".${suite}${extraSuffix}"
+      local suiteParallel="$parallel"
+      # Each group_replication test starts 3-4 mysqld. Under valgrind the
+      # default slot count oversubscribes the host and members get expelled.
+      if [[ "${ANALYZER_OPTS}" == *WITH_VALGRIND=ON* ]] && [[ "${suite}" == group_replication* ]]; then
+        suiteParallel=${GR_VALGRIND_PARALLEL:-$(( parallel / 2 > 0 ? parallel / 2 : 1 ))}
+        echo "Valgrind: running ${suite} with --parallel=${suiteParallel} (was ${parallel})"
+      fi
+      execute "$suiteParallel" "--suite=$suite $extraOptions" ".${suite}${extraSuffix}"
     done
   fi
 }
